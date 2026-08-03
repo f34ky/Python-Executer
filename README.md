@@ -1,2 +1,85 @@
-# Python-Executer
-My new program written in python. In it you can write scripts directly from the program itself! If you have downloaded this program, I will say in advance - thank you very much! Also connect to my discord server! https://discord.gg/e5UUr8kV4
+# 🚀 Code Executer
+
+**Мини-IDE для выполнения Python кода с установкой библиотек прямо из интерфейса**
+
+![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)
+![Tkinter](https://img.shields.io/badge/GUI-Tkinter-green)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
+---
+
+## 📌 О проекте
+
+Простой, но мощный редактор кода с возможностью:
+- 📝 Написание и выполнение Python кода в реальном времени
+- 📦 Установка библиотек через `pip` прямо из интерфейса
+- 🎨 Тёмная тема как в нормальных IDE
+- ⌨️ Авто-табуляция после `:` (как в PyCharm)
+- 🔥 Горячая клавиша `\` для быстрого вызова
+
+---
+
+## 🖼️ Скриншоты
+
+Главное меню → Executer → Редактор с выводом
+
+---
+
+## ⚙️ Установка
+
+1. Скачай архив и распакуй в любую папку
+2. Установи зависимости:
+   ```bash
+   pip install keyboard
+   ```
+3. Запусти:
+   ```bash
+   python main.py
+   ```
+
+---
+
+## 🎮 Как пользоваться
+
+| Кнопка / Клавиша | Что делает |
+|------------------|------------|
+| `▶` | Выполнить код |
+| `Clear` | Очистить вывод |
+| `pip install` + `Install` | Установить библиотеку |
+| `\` | Открыть Executer |
+| `Tab` | Вставить 4 пробела |
+| `Shift + Tab` | Удалить 4 пробела |
+| `Enter` после `:` | Авто-табуляция |
+
+---
+
+## 📁 Структура
+
+```
+main.py          # Главный файл
+requirements.txt # Зависимости
+README.md        # Этот файл
+```
+
+---
+
+## 🛠️ Требования
+
+- Python 3.8+
+- `keyboard`
+
+---
+
+## 🐞 Баги и предложения
+
+Пиши в [Discord](https://discord.gg/ссылка) или [Telegram](https://t.me/ник)
+
+---
+
+## 📜 Лицензия
+
+MIT License © 2026
+
+---
+
+**Спасибо, что используешь! 🚀**
