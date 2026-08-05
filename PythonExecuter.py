@@ -14,6 +14,7 @@ main_window = None
 executor_window = None
 close_window_ref = None
 settings_window = None
+find_window = None
 
 settings = {
     'bg_color': '#060708',
@@ -24,7 +25,8 @@ settings = {
     'button_fg': 'white',
     'font_family': 'Courier',
     'font_size': 10,
-    'title_bg': '#0a0a0a'
+    'title_bg': '#0a0a0a',
+    'autosave': True
 }
 
 SETTINGS_FILE = 'settings.json'
@@ -182,6 +184,166 @@ def highlight_syntax(text_widget, start="1.0", end="end"):
         start_idx = end_idx
 
 
+def show_autocomplete(text_widget, event=None):
+    word = text_widget.get("insert-1c", "insert")
+    if not word or not word.isalpha():
+        return
+
+    suggestions = [
+        'print', 'len', 'range', 'str', 'int', 'float', 'list', 'dict',
+        'set', 'tuple', 'open', 'input', 'type', 'isinstance', 'sum', 'max',
+        'min', 'sorted', 'reversed', 'enumerate', 'zip', 'map', 'filter',
+        'any', 'all', 'def', 'class', 'import', 'from', 'return', 'if',
+        'else', 'elif', 'for', 'while', 'break', 'continue', 'try', 'except',
+        'finally', 'with', 'as', 'lambda', 'True', 'False', 'None'
+    ]
+
+    matches = [s for s in suggestions if s.startswith(word)]
+    if not matches:
+        return
+
+    menu = Menu(text_widget, tearoff=0, bg='#2c3136', fg='white')
+    for match in matches[:10]:
+        menu.add_command(label=match, command=lambda m=match: insert_autocomplete(text_widget, word, m))
+    menu.post(text_widget.winfo_pointerx(), text_widget.winfo_pointery())
+
+
+def insert_autocomplete(text_widget, old_word, new_word):
+    text_widget.delete("insert-{}c".format(len(old_word)), "insert")
+    text_widget.insert("insert", new_word)
+
+
+def find_text(editor_widget):
+    global find_window
+    if find_window:
+        try:
+            find_window.lift()
+            return
+        except:
+            find_window = None
+
+    find_window = Toplevel()
+    find_window.title("Search and Replace")
+    find_window.geometry("400x180")
+    find_window.configure(bg=settings['bg_color'])
+    find_window.overrideredirect(True)
+
+    def close_find():
+        global find_window
+        find_window.destroy()
+        find_window = None
+
+    title_frame = tk.Frame(find_window, bg=settings['title_bg'], height=30)
+    title_frame.pack(fill="x", side="top")
+    title_frame.pack_propagate(False)
+
+    title_label = tk.Label(title_frame, text="Search and Replace", bg=settings['title_bg'], fg="white",
+                           font=("Segoe UI", 10))
+    title_label.pack(side="left", padx=10, pady=3)
+
+    close_btn = tk.Button(title_frame, text="✕", command=close_find,
+                          bg=settings['title_bg'], fg="white",
+                          relief="flat", padx=8, pady=0)
+    close_btn.pack(side="right", padx=2)
+
+    def start_move(event):
+        find_window.x = event.x
+        find_window.y = event.y
+
+    def do_move(event):
+        x = find_window.winfo_x() + (event.x - find_window.x)
+        y = find_window.winfo_y() + (event.y - find_window.y)
+        find_window.geometry(f"+{x}+{y}")
+
+    title_frame.bind("<Button-1>", start_move)
+    title_frame.bind("<B1-Motion>", do_move)
+    title_label.bind("<Button-1>", start_move)
+    title_label.bind("<B1-Motion>", do_move)
+
+    main_frame = tk.Frame(find_window, bg=settings['bg_color'])
+    main_frame.pack(fill="both", expand=True, padx=15, pady=15)
+
+    tk.Label(main_frame, text="Find:", bg=settings['bg_color'], fg=settings['text_color'], font=("Segoe UI", 10)).grid(
+        row=0, column=0, sticky="w", pady=3)
+    find_entry = tk.Entry(main_frame, width=30, bg="#2c3136", fg="white", insertbackground='white',
+                          font=("Segoe UI", 10))
+    find_entry.grid(row=0, column=1, pady=3, padx=5)
+    find_entry.focus()
+
+    tk.Label(main_frame, text="Replace:", bg=settings['bg_color'], fg=settings['text_color'],
+             font=("Segoe UI", 10)).grid(row=1, column=0, sticky="w", pady=3)
+    replace_entry = tk.Entry(main_frame, width=30, bg="#2c3136", fg="white", insertbackground='white',
+                             font=("Segoe UI", 10))
+    replace_entry.grid(row=1, column=1, pady=3, padx=5)
+
+    def find_next():
+        search_text = find_entry.get()
+        if not search_text:
+            return
+
+        editor_widget.tag_remove("search", "1.0", "end")
+
+        start_pos = editor_widget.index("insert")
+        pos = editor_widget.search(search_text, start_pos, "end")
+        if pos:
+            end_pos = f"{pos}+{len(search_text)}c"
+            editor_widget.tag_config("search", background="#264f78", foreground="white")
+            editor_widget.tag_add("search", pos, end_pos)
+            editor_widget.mark_set("insert", end_pos)
+            editor_widget.see(pos)
+        else:
+            pos = editor_widget.search(search_text, "1.0", "end")
+            if pos:
+                end_pos = f"{pos}+{len(search_text)}c"
+                editor_widget.tag_config("search", background="#264f78", foreground="white")
+                editor_widget.tag_add("search", pos, end_pos)
+                editor_widget.mark_set("insert", end_pos)
+                editor_widget.see(pos)
+
+    def replace_one():
+        search_text = find_entry.get()
+        replace_text = replace_entry.get()
+        if not search_text:
+            return
+
+        start_pos = editor_widget.index("insert")
+        pos = editor_widget.search(search_text, start_pos, "end")
+        if pos:
+            end_pos = f"{pos}+{len(search_text)}c"
+            editor_widget.delete(pos, end_pos)
+            editor_widget.insert(pos, replace_text)
+            editor_widget.tag_remove("search", "1.0", "end")
+
+    def replace_all():
+        search_text = find_entry.get()
+        replace_text = replace_entry.get()
+        if not search_text:
+            return
+        content = editor_widget.get("1.0", "end")
+        new_content = content.replace(search_text, replace_text)
+        editor_widget.delete("1.0", "end")
+        editor_widget.insert("1.0", new_content)
+        editor_widget.tag_remove("search", "1.0", "end")
+
+    button_frame = tk.Frame(main_frame, bg=settings['bg_color'])
+    button_frame.grid(row=2, column=0, columnspan=2, pady=10)
+
+    tk.Button(button_frame, text="Find", command=find_next,
+              bg=settings['button_bg'], fg=settings['button_fg'],
+              font=("Segoe UI", 10), padx=15).pack(side="left", padx=3)
+    tk.Button(button_frame, text="Replace", command=replace_one,
+              bg=settings['button_bg'], fg=settings['button_fg'],
+              font=("Segoe UI", 10), padx=15).pack(side="left", padx=3)
+    tk.Button(button_frame, text="Replace All", command=replace_all,
+              bg=settings['button_bg'], fg=settings['button_fg'],
+              font=("Segoe UI", 10), padx=15).pack(side="left", padx=3)
+
+    find_entry.bind("<Return>", lambda e: find_next())
+
+    find_window.protocol("WM_DELETE_WINDOW", close_find)
+    find_window.mainloop()
+
+
 def start():
     global main_window, executor_window, close_window_ref, settings_window, current_file
 
@@ -251,18 +413,18 @@ def start():
         settings_window.geometry("500x600")
         settings_window.configure(bg=settings['bg_color'])
 
-        create_custom_titlebar(settings_window, "⚙️ Настройки", settings['title_bg'])
+        create_custom_titlebar(settings_window, "Settings", settings['title_bg'])
 
         main_frame = tk.Frame(settings_window, bg=settings['bg_color'])
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        title = tk.Label(main_frame, text="⚙️ Настройки",
+        title = tk.Label(main_frame, text="Settings",
                          font=("Segoe UI", 16, "bold"),
                          bg=settings['bg_color'], fg=settings['text_color'])
         title.pack(pady=(0, 20))
 
         def change_bg():
-            color = colorchooser.askcolor(title="Выберите цвет фона")[1]
+            color = colorchooser.askcolor(title="Select background color")[1]
             if color:
                 settings['bg_color'] = color
                 settings_window.configure(bg=color)
@@ -270,46 +432,46 @@ def start():
                 save_settings()
                 update_preview()
 
-        btn_bg = tk.Button(main_frame, text="🎨 Цвет фона",
+        btn_bg = tk.Button(main_frame, text="Background color",
                            command=change_bg,
                            bg=settings['button_bg'], fg=settings['button_fg'],
                            font=("Segoe UI", 10), padx=20, pady=5)
         btn_bg.pack(pady=5)
 
         def change_editor_bg():
-            color = colorchooser.askcolor(title="Выберите цвет редактора")[1]
+            color = colorchooser.askcolor(title="Select editor color")[1]
             if color:
                 settings['editor_bg'] = color
                 save_settings()
                 update_preview()
 
-        btn_editor = tk.Button(main_frame, text="📝 Цвет редактора",
+        btn_editor = tk.Button(main_frame, text="Editor color",
                                command=change_editor_bg,
                                bg=settings['button_bg'], fg=settings['button_fg'],
                                font=("Segoe UI", 10), padx=20, pady=5)
         btn_editor.pack(pady=5)
 
         def change_output_bg():
-            color = colorchooser.askcolor(title="Выберите цвет вывода")[1]
+            color = colorchooser.askcolor(title="Select output color")[1]
             if color:
                 settings['output_bg'] = color
                 save_settings()
                 update_preview()
 
-        btn_output = tk.Button(main_frame, text="📤 Цвет вывода",
+        btn_output = tk.Button(main_frame, text="Output color",
                                command=change_output_bg,
                                bg=settings['button_bg'], fg=settings['button_fg'],
                                font=("Segoe UI", 10), padx=20, pady=5)
         btn_output.pack(pady=5)
 
         def change_text_color():
-            color = colorchooser.askcolor(title="Выберите цвет текста")[1]
+            color = colorchooser.askcolor(title="Select text color")[1]
             if color:
                 settings['text_color'] = color
                 save_settings()
                 update_preview()
 
-        btn_text = tk.Button(main_frame, text="✏️ Цвет текста",
+        btn_text = tk.Button(main_frame, text="Text color",
                              command=change_text_color,
                              bg=settings['button_bg'], fg=settings['button_fg'],
                              font=("Segoe UI", 10), padx=20, pady=5)
@@ -317,11 +479,11 @@ def start():
 
         def change_font():
             font_frame = tk.Toplevel(settings_window)
-            font_frame.title("Выбор шрифта")
+            font_frame.title("Select font")
             font_frame.geometry("300x200")
             font_frame.configure(bg=settings['bg_color'])
 
-            tk.Label(font_frame, text="Выберите шрифт:",
+            tk.Label(font_frame, text="Select font:",
                      bg=settings['bg_color'], fg=settings['text_color'],
                      font=("Segoe UI", 10)).pack(pady=10)
 
@@ -340,11 +502,11 @@ def start():
                     font_frame.destroy()
                     update_preview()
 
-            tk.Button(font_frame, text="Применить", command=apply_font,
+            tk.Button(font_frame, text="Apply", command=apply_font,
                       bg=settings['button_bg'], fg=settings['button_fg'],
                       font=("Segoe UI", 10)).pack(pady=5)
 
-        btn_font = tk.Button(main_frame, text="🔤 Шрифт",
+        btn_font = tk.Button(main_frame, text="Font",
                              command=change_font,
                              bg=settings['button_bg'], fg=settings['button_fg'],
                              font=("Segoe UI", 10), padx=20, pady=5)
@@ -352,11 +514,11 @@ def start():
 
         def change_font_size():
             size_frame = tk.Toplevel(settings_window)
-            size_frame.title("Размер шрифта")
+            size_frame.title("Font size")
             size_frame.geometry("250x150")
             size_frame.configure(bg=settings['bg_color'])
 
-            tk.Label(size_frame, text="Размер шрифта:",
+            tk.Label(size_frame, text="Font size:",
                      bg=settings['bg_color'], fg=settings['text_color'],
                      font=("Segoe UI", 10)).pack(pady=10)
 
@@ -371,11 +533,11 @@ def start():
                 size_frame.destroy()
                 update_preview()
 
-            tk.Button(size_frame, text="Применить", command=apply_size,
+            tk.Button(size_frame, text="Apply", command=apply_size,
                       bg=settings['button_bg'], fg=settings['button_fg'],
                       font=("Segoe UI", 10)).pack(pady=5)
 
-        btn_size = tk.Button(main_frame, text="📏 Размер шрифта",
+        btn_size = tk.Button(main_frame, text="Font size",
                              command=change_font_size,
                              bg=settings['button_bg'], fg=settings['button_fg'],
                              font=("Segoe UI", 10), padx=20, pady=5)
@@ -391,14 +553,15 @@ def start():
                 'button_fg': 'white',
                 'font_family': 'Courier',
                 'font_size': 10,
-                'title_bg': '#0a0a0a'
+                'title_bg': '#0a0a0a',
+                'autosave': True
             })
             save_settings()
             settings_window.destroy()
             settings_window = None
             open_settings()
 
-        btn_reset = tk.Button(main_frame, text="🔄 Сброс настроек",
+        btn_reset = tk.Button(main_frame, text="Reset settings",
                               command=reset_settings,
                               bg="#c0392b", fg="white",
                               font=("Segoe UI", 10), padx=20, pady=5)
@@ -412,7 +575,7 @@ def start():
                                font=(settings['font_family'], settings['font_size']),
                                relief='flat', bd=0)
         preview_text.pack(pady=5, padx=5, fill=BOTH, expand=True)
-        preview_text.insert(END, "Пример текста\nС настройками 😊")
+        preview_text.insert(END, "Preview text\nWith settings 😊")
         preview_text.config(state=DISABLED)
 
         def update_preview():
@@ -468,7 +631,7 @@ def start():
                         exemenu.title(f"Code Executer - {os.path.basename(file_path)}")
                         highlight_syntax(txtpole)
                 except Exception as e:
-                    txtpole.insert("1.0", f"❌ Error opening file: {e}")
+                    txtpole.insert("1.0", f"Error opening file: {e}")
 
         def save_file():
             global current_file
@@ -478,7 +641,7 @@ def start():
                         f.write(txtpole.get("1.0", END).strip())
                     exemenu.title(f"Code Executer - {os.path.basename(current_file)}")
                 except Exception as e:
-                    txtpole.insert(END, f"\n❌ Error saving file: {e}")
+                    txtpole.insert(END, f"\nError saving file: {e}")
             else:
                 save_file_as()
 
@@ -495,7 +658,17 @@ def start():
                         f.write(txtpole.get("1.0", END).strip())
                     exemenu.title(f"Code Executer - {os.path.basename(file_path)}")
                 except Exception as e:
-                    txtpole.insert(END, f"\n❌ Error saving file: {e}")
+                    txtpole.insert(END, f"\nError saving file: {e}")
+
+        def auto_save():
+            if current_file and settings.get('autosave', True):
+                try:
+                    with open(current_file, 'w', encoding='utf-8') as f:
+                        f.write(txtpole.get("1.0", END).strip())
+                    status_var.set(f"Autosave: {os.path.basename(current_file)}")
+                except:
+                    pass
+            exemenu.after(30000, auto_save)
 
         def insert_tab(event):
             txtpole.insert(INSERT, "    ")
@@ -526,11 +699,11 @@ def start():
         def run_code():
             code = txtpole.get("1.0", END).strip()
             if not code:
-                output.insert(END, "⚠️ No code to execute!\n")
+                output.insert(END, "No code to execute!\n")
                 return
 
             output.delete("1.0", END)
-            output.insert(END, "▶️ Executing...\n")
+            output.insert(END, "Executing...\n")
 
             def execute():
                 try:
@@ -552,20 +725,20 @@ def start():
                     exec(code, exec_globals)
 
                 except Exception as e:
-                    output.insert(END, f"❌ Error: {e}\n")
+                    output.insert(END, f"Error: {e}\n")
                 finally:
                     sys.stdout = old_stdout
-                    output.insert(END, "\n✅ Execution complete!\n")
+                    output.insert(END, "\nExecution complete!\n")
 
             threading.Thread(target=execute, daemon=True).start()
 
         def install_library():
             lib_name = lib_entry.get().strip()
             if not lib_name:
-                output.insert(END, "⚠️ Enter library name!\n")
+                output.insert(END, "Enter library name!\n")
                 return
 
-            output.insert(END, f"📦 Installing {lib_name}...\n")
+            output.insert(END, f"Installing {lib_name}...\n")
 
             def install():
                 try:
@@ -575,12 +748,12 @@ def start():
                         text=True
                     )
                     if result.returncode == 0:
-                        output.insert(END, f"✅ {lib_name} installed successfully!\n")
+                        output.insert(END, f"{lib_name} installed successfully!\n")
                         output.insert(END, result.stdout + "\n")
                     else:
-                        output.insert(END, f"❌ Installation failed!\n{result.stderr}\n")
+                        output.insert(END, f"Installation failed!\n{result.stderr}\n")
                 except Exception as e:
-                    output.insert(END, f"❌ Error: {e}\n")
+                    output.insert(END, f"Error: {e}\n")
 
             threading.Thread(target=install, daemon=True).start()
 
@@ -605,6 +778,23 @@ def start():
                 exemenu.after_cancel(on_text_change.after_id)
             on_text_change.after_id = exemenu.after(500, lambda: highlight_syntax(txtpole))
 
+            if event and event.keysym in ['space', 'parenleft']:
+                show_autocomplete(txtpole)
+
+            update_status()
+
+        def update_status():
+            cursor_pos = txtpole.index(INSERT)
+            line, col = cursor_pos.split('.')
+            content = txtpole.get("1.0", END)
+            char_count = len(content) - 1
+
+            if current_file:
+                file_name = os.path.basename(current_file)
+                status_var.set(f"File: {file_name} | Line: {line} | Col: {col} | Chars: {char_count}")
+            else:
+                status_var.set(f"New file | Line: {line} | Col: {col} | Chars: {char_count}")
+
         exemenu = Tk()
         exemenu.geometry("900x700")
         exemenu.configure(bg=settings['bg_color'])
@@ -618,22 +808,22 @@ def start():
         button_frame = tk.Frame(main_container, bg=settings['bg_color'])
         button_frame.pack(pady=5, fill="x")
 
-        btn_new = tk.Button(button_frame, text="📄 New", command=new_file,
+        btn_new = tk.Button(button_frame, text="New", command=new_file,
                             bg=settings['button_bg'], fg=settings['button_fg'],
                             font=('Arial', 10), padx=10)
         btn_new.pack(side="left", padx=2)
 
-        btn_open = tk.Button(button_frame, text="📂 Open", command=open_file,
+        btn_open = tk.Button(button_frame, text="Open", command=open_file,
                              bg=settings['button_bg'], fg=settings['button_fg'],
                              font=('Arial', 10), padx=10)
         btn_open.pack(side="left", padx=2)
 
-        btn_save = tk.Button(button_frame, text="💾 Save", command=save_file,
+        btn_save = tk.Button(button_frame, text="Save", command=save_file,
                              bg=settings['button_bg'], fg=settings['button_fg'],
                              font=('Arial', 10), padx=10)
         btn_save.pack(side="left", padx=2)
 
-        btn_save_as = tk.Button(button_frame, text="💾 Save As", command=save_file_as,
+        btn_save_as = tk.Button(button_frame, text="Save As", command=save_file_as,
                                 bg=settings['button_bg'], fg=settings['button_fg'],
                                 font=('Arial', 10), padx=10)
         btn_save_as.pack(side="left", padx=2)
@@ -641,7 +831,7 @@ def start():
         sep1 = tk.Frame(button_frame, width=2, height=30, bg="#2c3136")
         sep1.pack(side="left", padx=5)
 
-        btn_run = tk.Button(button_frame, text="▶ Run", command=run_code,
+        btn_run = tk.Button(button_frame, text="Run", command=run_code,
                             bg=settings['button_bg'], fg=settings['button_fg'],
                             font=('Arial', 10), padx=10)
         btn_run.pack(side="left", padx=2)
@@ -650,6 +840,11 @@ def start():
                               bg=settings['button_bg'], fg=settings['button_fg'],
                               font=('Arial', 10), padx=10)
         btn_clear.pack(side="left", padx=2)
+
+        btn_find = tk.Button(button_frame, text="Find", command=lambda: find_text(txtpole),
+                             bg=settings['button_bg'], fg=settings['button_fg'],
+                             font=('Arial', 10), padx=10)
+        btn_find.pack(side="left", padx=2)
 
         sep2 = tk.Frame(button_frame, width=2, height=30, bg="#2c3136")
         sep2.pack(side="left", padx=5)
@@ -686,7 +881,9 @@ def start():
                                             insertbackground='white',
                                             selectbackground='#264f78',
                                             relief='flat',
-                                            bd=0)
+                                            bd=0,
+                                            undo=True,
+                                            maxundo=100)
         txtpole.pack(padx=0, pady=0, fill=BOTH, expand=True)
 
         txtpole.bind("<Tab>", insert_tab)
@@ -694,6 +891,11 @@ def start():
         txtpole.bind("<KeyRelease>", on_text_change)
         txtpole.bind("<ButtonRelease>", update_line_numbers)
         txtpole.bind("<MouseWheel>", lambda e: update_line_numbers())
+        txtpole.bind("<Control-z>", lambda e: txtpole.edit_undo())
+        txtpole.bind("<Control-y>", lambda e: txtpole.edit_redo())
+        txtpole.bind("<Control-f>", lambda e: find_text(txtpole))
+        txtpole.bind("<Control-F>", lambda e: find_text(txtpole))
+        txtpole.bind("<Control-space>", lambda e: show_autocomplete(txtpole))
 
         exemenu.bind("<Control-o>", lambda e: open_file())
         exemenu.bind("<Control-O>", lambda e: open_file())
@@ -729,10 +931,26 @@ def start():
                                            bd=0)
         output.pack(padx=10, pady=5, fill=BOTH, expand=True)
 
+        status_var = tk.StringVar()
+        status_var.set("Ready")
+
+        status_bar = tk.Label(exemenu, textvariable=status_var,
+                              bg="#252526", fg="#858585",
+                              font=("Arial", 9), anchor="w", padx=10)
+        status_bar.pack(side=BOTTOM, fill=X)
+
         update_line_numbers()
+        update_status()
+        auto_save()
 
         def on_closing():
             global executor_window
+            if current_file and settings.get('autosave', True):
+                try:
+                    with open(current_file, 'w', encoding='utf-8') as f:
+                        f.write(txtpole.get("1.0", END).strip())
+                except:
+                    pass
             executor_window = None
             exemenu.destroy()
 
@@ -754,25 +972,25 @@ def start():
     content_frame = tk.Frame(menu, bg=settings['bg_color'])
     content_frame.pack(fill="both", expand=True, pady=10)
 
-    bt1 = tk.Button(content_frame, text="🚀 Executer", command=open_executor,
+    bt1 = tk.Button(content_frame, text="Executer", command=open_executor,
                     bg=settings['button_bg'], fg=settings['button_fg'],
                     font=('Arial', 10, 'bold'),
                     padx=20, pady=8, width=15)
     bt1.pack(pady=5)
 
-    bt3 = tk.Button(content_frame, text="⚙️ Настройки", command=open_settings,
+    bt3 = tk.Button(content_frame, text="Settings", command=open_settings,
                     bg=settings['button_bg'], fg=settings['button_fg'],
                     font=('Arial', 10, 'bold'),
                     padx=20, pady=8, width=15)
     bt3.pack(pady=5)
 
-    donate_btn = tk.Button(content_frame, text="💖 Поддержать", command=open_donation,
+    donate_btn = tk.Button(content_frame, text="Support", command=open_donation,
                            bg="#f39c12", fg="white",
                            font=('Arial', 10, 'bold'),
                            padx=20, pady=8, width=15)
     donate_btn.pack(pady=5)
 
-    bt2 = tk.Button(content_frame, text="❌ Close", command=close,
+    bt2 = tk.Button(content_frame, text="Close", command=close,
                     bg=settings['button_bg'], fg=settings['button_fg'],
                     font=('Arial', 10, 'bold'),
                     padx=20, pady=8, width=15)
